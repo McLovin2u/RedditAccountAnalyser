@@ -1,5 +1,4 @@
 import json
-
 import praw
 import requests
 from hashlib import blake2b
@@ -7,8 +6,10 @@ from bottle import route, run, template, static_file, post, request
 from prawcore import NotFound
 from operator import itemgetter
 
+REDDIT_KEYS = 'keys.json' #Path to json containing credentials for PRAW
+
 def getRedditUsingKeys(file):
-    with open('keys.json', 'r') as file:
+    with open(file, 'r') as file:
         keys = json.loads(file.read())
         return praw.Reddit(
             client_id=keys['client_id'],
@@ -99,5 +100,5 @@ def lookup():
     return template('./static/results', response=response)
 
 
-reddit = getRedditUsingKeys('keys.json')
+reddit = getRedditUsingKeys(REDDIT_KEYS)
 run(host='localhost', port=8080)
