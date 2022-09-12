@@ -1,3 +1,5 @@
+import json
+
 import praw
 import requests
 from hashlib import blake2b
@@ -5,6 +7,14 @@ from bottle import route, run, template, static_file, post, request
 from prawcore import NotFound
 from operator import itemgetter
 
+def getRedditUsingKeys(file):
+    with open('keys.json', 'r') as file:
+        keys = json.loads(file.read())
+        return praw.Reddit(
+            client_id=keys['client_id'],
+            client_secret=keys['client_secret'],
+            user_agent=keys['user_agent'],
+        )
 
 def getImageBytes(url):
     with requests.get(url) as r:
@@ -67,13 +77,6 @@ def getUniquePosts(user, num_posts):
     }
 
 
-reddit = praw.Reddit(
-    client_id="tLJyCOzf9OYkKTUnAJ8ZYw",
-    client_secret="hm-02mb9JDwJbZiY5NqfjOPZuXnSsg",
-    user_agent="Unique_Post_Analyser",
-)
-
-
 @route('/')
 def home():
     return static_file(filename='home.html', root='./static')
@@ -96,4 +99,5 @@ def lookup():
     return template('./static/results', response=response)
 
 
+reddit = getRedditUsingKeys('keys.json')
 run(host='localhost', port=8080)
