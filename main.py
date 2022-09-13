@@ -6,7 +6,7 @@ from bottle import route, run, template, static_file, post, request
 from prawcore import NotFound
 from operator import itemgetter
 
-REDDIT_KEYS = 'keys.json' #Path to json containing credentials for PRAW
+REDDIT_KEYS = 'keys.json'  # Path to json containing credentials for PRAW
 
 def getRedditUsingKeys(file):
     with open(file, 'r') as file:
