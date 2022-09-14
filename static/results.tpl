@@ -13,7 +13,11 @@
     <form method="get" action="/">
        <button type="submit">Return</button>
     </form>
-
+    <ul>
+        Subs:
+        % for sub in response['subs']:
+        <li>{{sub['name']}}:{{sub['size']}} Posts</li>
+    </ul>
    <table>
        <tr>
            <th>Post</th>

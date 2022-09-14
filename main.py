@@ -1,10 +1,14 @@
 import json
+import time
+import bottle
 import praw
 import requests
 from hashlib import blake2b
 from bottle import route, run, template, static_file, post, request
 from prawcore import NotFound
 from operator import itemgetter
+import bottle_session
+import bottle_redis
 
 REDDIT_KEYS = 'keys.json'  # Path to json containing credentials for PRAW
 
@@ -60,6 +64,7 @@ def getUniquePosts(user, num_posts):
         else:
             ident = submission.title
         unique_posts[ident] = {
+            'post_id': submission.id,
             'post_url': f'https://reddit.com/{submission.permalink}',
             'out_url': submission.url,
             'title': submission.title,
@@ -77,14 +82,36 @@ def getUniquePosts(user, num_posts):
         'numUnique': len(unique_posts)
     }
 
+def createRedis(list_of_posts, rdb, username):
+    for post in list_of_posts:
+        for key in post:
+            rdb.hset(name=post['post_id'], key=key, value=post[key])
+        rdb.sadd(username+'subs', post['sub'])
+        rdb.lpush(username+post['sub'], post['post_id'])
+        rdb.lpush(username + 'ids', post['post_id'])
+
+def getSubs(rdb, username):
+    # allIds = rdb.lrange(username+'ids', 0, -1)
+    # postResults= []
+    # for id in allIds:
+    #     postResults.append(rdb.hgetall(id))
+    allSubs = rdb.lrange(username+'subs', 0, -1)
+    subResults = []
+    for sub in allSubs:
+        subResults.append({
+            'name': sub,
+            'size': rdb.llen(username+sub)
+        })
+    return subResults
+
 
 @route('/')
-def home():
+def home(session):
     return static_file(filename='home.html', root='./static')
 
 
 @post('/lookup')
-def lookup():
+def lookup(session, rdb):
     username = request.forms.get('username')
     num_posts = request.forms.get('num_posts')
     sort_by = request.forms.get('sort_by')
@@ -96,9 +123,17 @@ def lookup():
     if not unique_posts:
         return "USER DOES NOT EXIST"
     unique_posts['list'] = sorted(unique_posts['list'], key=itemgetter(sort_by))
+    createRedis(unique_posts['list'], rdb, username)
     response = unique_posts
+    session['Account'] = username
+    response['subs'] = getSubs(rdb, username)
     return template('./static/results', response=response)
 
 
 reddit = getRedditUsingKeys(REDDIT_KEYS)
-run(host='localhost', port=8080)
+app = bottle.default_app()
+session_plugin = bottle_session.SessionPlugin(cookie_lifetime=300)
+redis_plugin = bottle_redis.RedisPlugin(host='localhost')
+app.install(session_plugin)
+app.install(redis_plugin)
+run(app=app, host='localhost', port=8080)
