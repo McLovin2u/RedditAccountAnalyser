@@ -7,8 +7,8 @@
 </head>
 <body>
    <h1> Results </h1>
-   <h2> Unique Posts of {{response['accountName']}}:</h2>
-   <h2>{{response['numUnique']}} unique Items found in {{response['numPosts']}} Posts <br> Repost Rate: {{response['repostRate']}}%</h2>
+   <h2> Unique Posts of {{response['username']}}:</h2>
+   <h2>{{response['num_posts']}} Posts:</h2>
 
     <form method="get" action="/">
        <button type="submit">Return</button>
@@ -17,6 +17,7 @@
         Subs:
         % for sub in response['subs']:
         <li>{{sub['name']}}:{{sub['size']}} Posts</li>
+        % end
     </ul>
    <table>
        <tr>
@@ -25,12 +26,12 @@
            <th>Sub</th>
            <th>Upvotes</th>
        </tr>
-        % for post in response['list']:
+        % for post in response['posts']:
        <tr>
            <td><a href={{post['post_url']}}> {{post['title']}} </a></td>
            <td>
                <a href={{post['out_url']}}>
-                   <img src="{{post['thumbnail']}}" alt="Thumbnail">
+                   <img src={{post['thumbnail']}} alt="Thumbnail">
                </a>
            </td>
            <td>{{post['sub']}}</td>
