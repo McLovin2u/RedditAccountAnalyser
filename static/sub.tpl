@@ -3,34 +3,15 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Results</title>
+    <title>{{response['subName']}}</title>
 </head>
 <body>
-   <h1> Results </h1>
-   <h2> Unique Posts of {{response['username']}}:</h2>
+   <h1> {{response['username']}}'s Posts in {{response['subName']}} </h1>
    <h2>{{response['num_posts']}} Posts:</h2>
 
-    <form method="get" action="/">
+    <form method="get" action="/overview">
        <button type="submit">Return</button>
     </form>
-    <ul>
-        Subs:
-        % for sub in response['subs']:
-        <li>{{sub['name']}}:{{sub['size']}} Posts</li>
-        % end
-    </ul>
-
-
-    <form method="post" action="/singleSub">
-        <label for="sub">Filter by Subreddit:</label>
-        <select name="sub" id="sub">
-          % for sub in response['subs']:
-          <option value={{sub['name']}}>{{sub['name']}}</option>
-          % end
-        </select>
-        <button type="submit">Filter</button>
-    </form>
-
    <table>
        <tr>
            <th>Post</th>

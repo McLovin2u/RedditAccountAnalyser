@@ -44,10 +44,9 @@ def user_exists(name):
     return True
 
 
-def fetchPosts(username, num_posts, rdb: redis.Redis, session):
-    if rdb.scard(username+'ids') >= num_posts:
+def fetchPosts(username, num_posts, rdb: redis.Redis):
+    if rdb.scard(username + 'ids') >= num_posts:
         return
-    session['username'] = username
     redditor = reddit.redditor(username)
     submissions = redditor.submissions
     for submission in submissions.new(limit=num_posts):
@@ -84,8 +83,29 @@ def createOverview(rdb: redis.Redis, session):
     }
 
 
+def createSubPage(rdb: redis.Redis, session, sub):
+    username = session['username']
+    post_ids = rdb.smembers(username + sub)
+    posts = []
+    for id in post_ids:
+        posts.append(rdb.hgetall(id))
+    return ({
+        'username': username,
+        'subName': sub,
+        'posts': posts,
+        'num_posts': len(posts)
+    })
+
+
+def checkDefault(input, default):
+    if input == "" or input is None:
+        return default
+    else:
+        return int(input)
+
+
 def checkParams(username, num_posts):
-    if username == "" or num_posts == "":
+    if username == "":
         return False
     try:
         reddit.redditor(username).id
@@ -102,13 +122,34 @@ def home(session):
 @post('/overview')
 def lookup(session, rdb):
     username = request.forms.get('username')
-    num_posts = int(request.forms.get('num_posts'))
+    session['username'] = username
+    num_posts = checkDefault(request.forms.get('num_posts'), 50)
+    session['num_posts'] = num_posts
     if checkParams(username, num_posts):
-        fetchPosts(username, num_posts, rdb, session)
+        fetchPosts(username, num_posts, rdb)
         response = createOverview(rdb, session)
         return template('./static/overview', response=response)
     else:
         return 'BAD INPUT'
+
+
+@route('/overview')
+def lookup(session, rdb):
+    username = session['username']
+    num_posts = int(session['num_posts'])
+    if checkParams(username, num_posts):
+        fetchPosts(username, num_posts, rdb)
+        response = createOverview(rdb, session)
+        return template('./static/overview', response=response)
+    else:
+        return 'BAD INPUT'
+
+
+@post('/singleSub')
+def lookup(session, rdb):
+    sub = request.forms.get('sub')
+    response = createSubPage(rdb, session, sub)
+    return template('./static/sub', response=response)
 
 
 reddit = getRedditUsingKeys(REDDIT_KEYS)
@@ -117,4 +158,4 @@ session_plugin = bottle_session.SessionPlugin(cookie_lifetime=300)
 redis_plugin = bottle_redis.RedisPlugin(host='localhost', decode_responses=True)
 app.install(session_plugin)
 app.install(redis_plugin)
-run(app=app, host='localhost', port=8080)
+run(app=app, host='localhost', port=8080, debug=True)
