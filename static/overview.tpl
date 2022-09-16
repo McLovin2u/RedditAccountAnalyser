@@ -31,6 +31,21 @@
         <button type="submit">Filter</button>
     </form>
 
+    <form method="get" action="/overview">
+        <label for="sort_by">Sort by:</label>
+        <select name="sort_by" id="sort_by">
+          <option value='upvotes'>Upvotes</option>
+          <option value='sub'>Subreddit</option>
+        </select>
+        <input
+          type="checkbox"
+          id="unique"
+          name="unique"
+          value="unique" />
+        <label for="unique">Only show unique Items</label>
+        <button type="submit">Sort</button>
+    </form>
+
    <table>
        <tr>
            <th>Post</th>

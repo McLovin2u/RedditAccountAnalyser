@@ -1,5 +1,4 @@
 import json
-import time
 import bottle
 import praw
 import redis
@@ -7,9 +6,11 @@ import requests
 from hashlib import blake2b
 from bottle import route, run, template, static_file, post, request
 from prawcore import NotFound
-from operator import itemgetter
 import bottle_session
 import bottle_redis
+import io
+import imagehash
+from PIL import Image
 
 REDDIT_KEYS = 'keys.json'  # Path to json containing credentials for PRAW
 
@@ -27,7 +28,9 @@ def getRedditUsingKeys(file):
 def getImageBytes(url):
     with requests.get(url) as r:
         r.raise_for_status()
-        return r.content
+        image = Image.open(io.BytesIO(r.content))
+        hash = imagehash.average_hash(image)
+        return hash
 
 
 def getHash(imgBytes):
@@ -44,16 +47,30 @@ def user_exists(name):
     return True
 
 
+def deleteDuplicatePosts(posts):
+    unique_posts = {}
+    for post in posts:
+        if 'http' in post['thumbnail']:
+            ident = getImageBytes(post['thumbnail'])
+        else:
+            ident = post['title']
+        unique_posts[ident] = post
+    return list(unique_posts.values())
+
+
 def fetchPosts(username, num_posts, rdb: redis.Redis):
-    if rdb.scard(username + 'ids') >= num_posts:
-        return
     redditor = reddit.redditor(username)
-    submissions = redditor.submissions
-    for submission in submissions.new(limit=num_posts):
+    submissions = redditor.submissions.new(limit=num_posts)
+    if rdb.get(username + '_max_tried') is not None and int(rdb.get(username + '_max_tried')) >= num_posts:
+        print("fetching from Redis")
+        return
+    print("fetching from API")
+    rdb.set(username+'_max_tried', num_posts)
+    for submission in submissions:
         rdb.hset(name=submission.id, key='post_id', value=submission.id)
         rdb.hset(name=submission.id, key='title', value=submission.title)
         rdb.hset(name=submission.id, key='thumbnail', value=submission.thumbnail)
-        rdb.hset(name=submission.id, key='upvotes', value=submission.ups)
+        rdb.hset(name=submission.id, key='upvotes', value=int(submission.ups))
         rdb.hset(name=submission.id, key='post_url', value=f'https://reddit.com{submission.permalink}')
         rdb.hset(name=submission.id, key='out_url', value=submission.url)
         rdb.hset(name=submission.id, key='sub', value=submission.subreddit.display_name)
@@ -63,13 +80,16 @@ def fetchPosts(username, num_posts, rdb: redis.Redis):
         rdb.sadd(username + 'ids', submission.id)
 
 
-def createOverview(rdb: redis.Redis, session):
+def createOverview(rdb: redis.Redis, session, sort_by='upvotes', unique=False):
     username = session['username']
     post_ids = rdb.smembers(username + 'ids')
     posts = []
     for id in post_ids:
         posts.append(rdb.hgetall(id))
+    if unique:
+        posts = deleteDuplicatePosts(posts)
     subs = []
+    posts.sort(key=lambda x: int(x[sort_by]) if sort_by == 'upvotes' else x[sort_by], reverse=sort_by=='upvotes')
     for sub in rdb.smembers(username + 'subs'):
         subs.append({
             'name': sub,
@@ -89,6 +109,7 @@ def createSubPage(rdb: redis.Redis, session, sub):
     posts = []
     for id in post_ids:
         posts.append(rdb.hgetall(id))
+    posts.sort(key=lambda x: int(x['upvotes']), reverse=True)
     return ({
         'username': username,
         'subName': sub,
@@ -135,11 +156,16 @@ def lookup(session, rdb):
 
 @route('/overview')
 def lookup(session, rdb):
+    if session['username'] is None:
+        return static_file(filename='redirect.html', root='./static')
     username = session['username']
     num_posts = int(session['num_posts'])
+    unique = request.GET.get('unique', False)
+    sort_by = request.GET.get('sort_by', 'upvotes')
+
     if checkParams(username, num_posts):
         fetchPosts(username, num_posts, rdb)
-        response = createOverview(rdb, session)
+        response = createOverview(rdb, session, sort_by=sort_by, unique=unique)
         return template('./static/overview', response=response)
     else:
         return 'BAD INPUT'
@@ -147,6 +173,8 @@ def lookup(session, rdb):
 
 @post('/singleSub')
 def lookup(session, rdb):
+    if session['username'] is None:
+        return static_file(filename='redirect.html', root='./static')
     sub = request.forms.get('sub')
     response = createSubPage(rdb, session, sub)
     return template('./static/sub', response=response)
